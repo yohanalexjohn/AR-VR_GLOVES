@@ -1,6 +1,19 @@
 #include "tasks.h"
 #include "pinConfig.h"
 #include "halSensor.h"
+#include "hapticMotor.h"
+
+// Send data from producer to consumer
+QueueHandle_t msg_queue;
+
+/**
+ * @brief store the sensor data
+ *
+ */
+struct messageData
+{
+    float sensorPosition; // eventually this will be an array each position for each each sensor
+};
 
 // PRIVATE FUNCTION DECLARTATIONS
 
@@ -11,23 +24,52 @@
  */
 static void getSensorData(void *pvParameters);
 
+/**
+ * @brief Get the relative finger position
+ *
+ * @param pvParameters
+ */
+static void motorState(void *pvParameters);
+
+void motorState(void *pvParameters)
+{
+    (void)pvParameters;
+
+    int sensor;
+    float data;
+
+    messageData motorDependency;
+
+    for (;;)
+    {
+        if (xQueueReceive(msg_queue, &motorDependency, portMAX_DELAY))
+        {
+            // Soon turn this to array's to validate this for each sensor 
+            hapticMotorFeature(sensor, data);
+        }
+
+        delay(10);
+    }
+}
 
 void getSensorData(void *pvParameters)
 {
     (void)pvParameters;
 
+    float data;
+    int sensor = 1;
+    messageData halValue;
+
     for (;;)
     {
-        float data;
-        int sensor = 1;
-
         data = get_halValue(sensor);
 
-        delay(100);
-    }
-    
-}
+        // Send sensor values to the structure
+        xQueueSend(msg_queue, &halValue, portMAX_DELAY);
 
+        delay(10);
+    }
+}
 
 // PUBLIC FUNCTION DEFINITIONS
 
@@ -42,17 +84,17 @@ void taskCreate(void)
         1,
         NULL);
 
-    // xTaskCreate(
-    //     sendData,
-    //     " Send data to pi",
-    //     1000,
-    //     NULL,
-    //     2,
-    //     NULL);
+    xTaskCreate(
+        motorState,
+        " decide if to turn the haptic motor on or off ",
+        1000,
+        NULL,
+        1,
+        NULL);
 
     // xTaskCreate(
-    //     activateAlarm,
-    //     "Activate the alarm",
+    //     bluetooth,
+    //     "enabling bluetooth connectivity and checking",
     //     1000,
     //     NULL,
     //     2,
@@ -70,7 +112,7 @@ void taskCreate(void)
     // msg_queue = xQueueCreate(QUEUE_LENGTH,
     //                          sizeof(sensorData));
 
-    // // Suspend activateAlarm until it is resumed by the software timer 
+    // // Suspend activateAlarm until it is resumed by the software timer
     // vTaskSuspend(alarmTaskHandler);
 
     vTaskDelete(NULL);
