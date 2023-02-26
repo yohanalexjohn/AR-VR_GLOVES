@@ -1,12 +1,15 @@
 #include <Arduino.h>
-#include "halSensor.h"
 #include "tasks.h"
+#include "leds.h"
+#include "buttons.h"
+#include "bleComms.h"
 
 void setup()
 {
-  Serial.begin(115200);
-  
-  halSensorInit();
+  Serial.begin(9600);
+  ledsInit();
+  buttonInit();
+  bluetoothInit(); 
   taskCreate();
 }
 

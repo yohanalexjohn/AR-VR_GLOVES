@@ -1,119 +1,42 @@
 #include "tasks.h"
-#include "pinConfig.h"
-#include "halSensor.h"
-#include "hapticMotor.h"
+#include "leds.h"
+#include "buttons.h"
+#include "bleComms.h"
 
-// Send data from producer to consumer
-QueueHandle_t msg_queue;
+// RTOS Private Function Declarations
 
-/**
- * @brief store the sensor data
- *
- */
-struct messageData
-{
-    float sensorPosition; // eventually this will be an array each position for each each sensor
-};
+static void vTaskHandler_Main(void *pvParameters);
+static void vTaskHandler_Leds(void *pvParameters);
+static void vTaskHandler_Button(void *pvParameters);
+static void vTaskHandler_Bluetooth(void *pvParameters);
+// @TODO: ADD INTERUPTS FOR BLUETOOTH RECIEVE
 
-// PRIVATE FUNCTION DECLARTATIONS
-
-/**
- * @brief Get the relative finger position
- *
- * @param pvParameters
- */
-static void getSensorData(void *pvParameters);
-
-/**
- * @brief Get the relative finger position
- *
- * @param pvParameters
- */
-static void motorState(void *pvParameters);
-
-void motorState(void *pvParameters)
-{
-    (void)pvParameters;
-
-    int sensor;
-    float data;
-
-    messageData motorDependency;
-
-    for (;;)
-    {
-        if (xQueueReceive(msg_queue, &motorDependency, portMAX_DELAY))
-        {
-            // Soon turn this to array's to validate this for each sensor 
-            hapticMotorFeature(sensor, data);
-        }
-
-        delay(10);
-    }
-}
-
-void getSensorData(void *pvParameters)
-{
-    (void)pvParameters;
-
-    float data;
-    int sensor = 1;
-    messageData halValue;
-
-    for (;;)
-    {
-        data = get_halValue(sensor);
-
-        // Send sensor values to the structure
-        xQueueSend(msg_queue, &halValue, portMAX_DELAY);
-
-        delay(10);
-    }
-}
+// RTOS Services
+QueueHandle_t xQueue_Leds, xQueue_Button, xQueue_BluetoothSend; 
 
 // PUBLIC FUNCTION DEFINITIONS
 
 // Create tasks
 void taskCreate(void)
 {
-    xTaskCreate(
-        getSensorData,
-        " Gather Data ",
-        1000,
-        NULL,
-        1,
-        NULL);
+    xQueue_Leds           = xQueueCreate(1, sizeof(int));  // LEDs Queue will eventually call this the motors queue
+    xQueue_Button         = xQueueCreate(1, sizeof(int));  // Buttons Queue will remame this to touch queue once touch is enabled 
+    xQueuen_BluetoothSend = xQueueCreate(1, sizeof(int));  // Bluetooth send Queue
 
-    xTaskCreate(
-        motorState,
-        " decide if to turn the haptic motor on or off ",
-        1000,
-        NULL,
-        1,
-        NULL);
+    // Check if queues are initalised succesfully for data trasnfer between module
+    if( xQueue_Leds != NULL && xQueue_Button != NULL && xQueue_BluetoothSend != NULL )
+    {
+        // Create the tasks and pin them to their respective cores
+            // Header                TaskHandler             TaskName for debugging   Stack Size   InParameters  Priority  TaskReference  Core
+            xTaskCreatePinnedToCore( vTaskHandler_Main,      "Task Main Brain",       1000,        NULL,         3,        NULL,           1 );
+            xTaskCreatePinnedToCore( vTaskHandler_Bluetooth, "Task Main Bluetooth",   900,         NULL,         2,        NULL,           0 );
+            xTaskCreatePinnedToCore( vTaskHandler_Button,    "Task Main Button",      800 ,        NULL,         1,        NULL,           1 );
+            xTaskCreatePinnedToCore( vTaskHandler_Leds,      "Task Main LEDs",        800,         NULL,         1,        NULL,           0 );
+    }
+    else
+    {
+        /* code */
+    }
+    
 
-    // xTaskCreate(
-    //     bluetooth,
-    //     "enabling bluetooth connectivity and checking",
-    //     1000,
-    //     NULL,
-    //     2,
-    //     &alarmTaskHandler);
-
-    // // Create a one-shot timer
-    // one_shot_timer = xTimerCreate(
-    //     "One-shot timer", // Name of timer
-    //     dim_delay,        // Period of timer (in ticks)
-    //     pdFALSE,          // Auto-reload
-    //     (void *)0,        // Timer ID
-    //     timeDoorCheck);   // Callback function
-
-    // // Setup the message queue
-    // msg_queue = xQueueCreate(QUEUE_LENGTH,
-    //                          sizeof(sensorData));
-
-    // // Suspend activateAlarm until it is resumed by the software timer
-    // vTaskSuspend(alarmTaskHandler);
-
-    vTaskDelete(NULL);
 }
